@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../models/item.dart';
 import '../widgets/invoice_preview.dart';
 
@@ -17,6 +18,7 @@ class _HomePageState extends State<HomePage> {
   DateTime _currentTime = DateTime.now();
   Item? _selectedItem;
   final TextEditingController _quantityController = TextEditingController();
+  final FocusNode _quantityFocusNode = FocusNode(); // Focus Node for Quantity
   final List<SelectedItem> _selectedItems = [];
   final ScrollController _scrollController = ScrollController();
   List<Item> items = [];
@@ -39,10 +41,10 @@ class _HomePageState extends State<HomePage> {
     _timer.cancel();
     _quantityController.dispose();
     _scrollController.dispose();
+    _quantityFocusNode.dispose(); // Dispose the focus node
     super.dispose();
   }
 
-  /// **Fetch items from Firestore**
   Future<void> fetchItemsFromFirestore() async {
     try {
       FirebaseFirestore firestore = FirebaseFirestore.instance;
@@ -84,14 +86,27 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    final existingItemIndex = _selectedItems.indexWhere(
+      (selectedItem) => selectedItem.item.id == _selectedItem!.id,
+    );
     setState(() {
-      _selectedItems.add(
-        SelectedItem(
-          item: _selectedItem!,
-          quantity: quantity,
-          total: _selectedItem!.price * quantity,
-        ),
-      );
+      if (existingItemIndex != -1) {
+        final existingItem = _selectedItems[existingItemIndex];
+        final newQuantity = existingItem.quantity + quantity;
+        _selectedItems[existingItemIndex] = SelectedItem(
+          item: existingItem.item,
+          quantity: newQuantity,
+          total: existingItem.item.price * newQuantity,
+        );
+      } else {
+        _selectedItems.add(
+          SelectedItem(
+            item: _selectedItem!,
+            quantity: quantity,
+            total: _selectedItem!.price * quantity,
+          ),
+        );
+      }
       _selectedItem = null;
       _quantityController.clear();
     });
@@ -105,10 +120,37 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  /// **Remove item from the list**
   void _removeItem(int index) {
     setState(() {
       _selectedItems.removeAt(index);
+    });
+  }
+
+  void _decrementItem(int index) {
+    setState(() {
+      final selectedItem = _selectedItems[index];
+      final newQuantity = selectedItem.quantity - 1;
+      if (newQuantity <= 0) {
+        _selectedItems.removeAt(index);
+        return;
+      }
+      _selectedItems[index] = SelectedItem(
+        item: selectedItem.item,
+        quantity: newQuantity,
+        total: selectedItem.item.price * newQuantity,
+      );
+    });
+  }
+
+  void _incrementItem(int index) {
+    setState(() {
+      final selectedItem = _selectedItems[index];
+      final newQuantity = selectedItem.quantity + 1;
+      _selectedItems[index] = SelectedItem(
+        item: selectedItem.item,
+        quantity: newQuantity,
+        total: selectedItem.item.price * newQuantity,
+      );
     });
   }
 
@@ -133,7 +175,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          "BillBro",
+          "Viruzverse",
           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
       ),
@@ -151,7 +193,7 @@ class _HomePageState extends State<HomePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Date: ${_currentTime.toString().substring(0, 11)}",
+                      "Date: ${DateFormat("dd/MM/yyyy").format(_currentTime)}",
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -159,7 +201,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     Text(
-                      "Time: ${_currentTime.toString().substring(11, 16)}",
+                      "Time: ${DateFormat("hh:mm a").format(_currentTime)}",
                       style: GoogleFonts.inter(
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
@@ -226,6 +268,14 @@ class _HomePageState extends State<HomePage> {
                                         setState(() {
                                           _selectedItem = value;
                                         });
+                                        Future.delayed(
+                                          const Duration(milliseconds: 100),
+                                          () {
+                                            FocusScope.of(
+                                              context,
+                                            ).requestFocus(_quantityFocusNode);
+                                          },
+                                        );
                                       },
                                     ),
                           ),
@@ -233,6 +283,8 @@ class _HomePageState extends State<HomePage> {
                           Expanded(
                             child: TextField(
                               controller: _quantityController,
+                              focusNode:
+                                  _quantityFocusNode, // Attach focus node
                               keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 labelText: 'Qty',
@@ -271,7 +323,6 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, index) {
                   final item = _selectedItems[index];
                   return ListTile(
-                    
                     title: Text('${item.item.name} x ${item.quantity}'),
                     subtitle: Text('₹${item.item.price} each'),
                     trailing: Row(
@@ -285,7 +336,15 @@ class _HomePageState extends State<HomePage> {
                             fontSize: 16,
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: 5),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: () => _incrementItem(index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.remove),
+                          onPressed: () => _decrementItem(index),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () => _removeItem(index),

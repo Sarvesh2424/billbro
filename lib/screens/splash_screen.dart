@@ -106,7 +106,7 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                   const SizedBox(height: 30),
                   Text(
-                    'BillBro',
+                    'Viruzverse',
                     style: GoogleFonts.inter(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,

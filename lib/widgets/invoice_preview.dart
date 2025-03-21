@@ -1,9 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../models/item.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class InvoicePreview extends StatelessWidget {
   final List<SelectedItem> items;
@@ -17,8 +21,47 @@ class InvoicePreview extends StatelessWidget {
     required this.date,
   });
 
-  Future<void> _generatePdf(BuildContext context) async {
+  Future<int> setInvoiceToFirestore() async {
+    try {
+      FirebaseFirestore firestore = FirebaseFirestore.instance;
+      DocumentReference counterRef = firestore
+          .collection('counters')
+          .doc('invoiceCounter');
+      DocumentSnapshot counterSnap = await counterRef.get();
+
+      int newId = 1;
+
+      if (counterSnap.exists) {
+        newId = counterSnap.get('count') + 1;
+        await counterRef.update({'count': newId});
+      } else {
+        await counterRef.set({'count': newId});
+      }
+
+      DocumentReference documentReference = await firestore
+          .collection('invoices')
+          .add({
+            'id': newId,
+            'items': items.map((e) => e.toJson()).toList(),
+            'total': total,
+            'date': Timestamp.fromDate(date),
+          });
+
+      print("Invoice saved successfully with ID: $newId");
+      return newId;
+    } catch (e) {
+      print("Error saving invoice: $e");
+      return 0;
+    }
+  }
+
+  Future<void> _generatePdf(BuildContext context, int newId) async {
     final pdf = pw.Document();
+    final fontData = await rootBundle.load('lib/assets/fa-solid-900.ttf');
+    final font = pw.Font.ttf(fontData);
+
+    final brandFontData = await rootBundle.load('lib/assets/fa-brands-400.ttf');
+    final brandFont = pw.Font.ttf(brandFontData);
 
     pdf.addPage(
       pw.Page(
@@ -32,11 +75,13 @@ class InvoicePreview extends StatelessWidget {
                 child: pw.Row(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    pw.Text('BillBro Invoice',
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                        )),
+                    pw.Text(
+                      'Invoice #$newId ',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
                     pw.Text(
                       'Date: ${date.toString().substring(0, 10)}',
                       style: const pw.TextStyle(fontSize: 16),
@@ -55,27 +100,37 @@ class InvoicePreview extends StatelessWidget {
                 },
                 children: [
                   pw.TableRow(
-                    decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.grey300,
+                    ),
                     children: [
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Item',
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        child: pw.Text(
+                          'Item',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Qty',
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        child: pw.Text(
+                          'Qty',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Price',
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        child: pw.Text(
+                          'Price',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
                       ),
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(8),
-                        child: pw.Text('Total',
-                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                        child: pw.Text(
+                          'Total',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
                       ),
                     ],
                   ),
@@ -92,11 +147,11 @@ class InvoicePreview extends StatelessWidget {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${item.item.price}'),
+                          child: pw.Text('Rs. ${item.item.price}'),
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${item.total}'),
+                          child: pw.Text('Rs. ${item.total}'),
                         ),
                       ],
                     ),
@@ -113,7 +168,7 @@ class InvoicePreview extends StatelessWidget {
                     border: pw.Border.all(),
                   ),
                   child: pw.Text(
-                    'Total Amount: ₹${total.toStringAsFixed(2)}',
+                    'Total Amount: Rs. ${total.toStringAsFixed(2)}',
                     style: pw.TextStyle(
                       fontSize: 16,
                       fontWeight: pw.FontWeight.bold,
@@ -121,15 +176,48 @@ class InvoicePreview extends StatelessWidget {
                   ),
                 ),
               ),
+              pw.SizedBox(height: 40),
+              pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    'Thank you for visiting us!',
+                    style: pw.TextStyle(fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        '\uf16d',
+                        style: pw.TextStyle(font: brandFont, fontSize: 20),
+                      ),
+                      pw.SizedBox(width: 10),
+                      pw.Text('@viruzverse.tech'),
+                    ],
+                  ),
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        '\uf0ac',
+                        style: pw.TextStyle(font: font, fontSize: 20),
+                      ),
+                      pw.SizedBox(width: 10),
+                      pw.Text('viruzverse.tech'),
+                    ],
+                  ),
+                ],
+              ),
             ],
           );
         },
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (format) async => pdf.save(),
-    );
+    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 
   @override
@@ -170,14 +258,14 @@ class InvoicePreview extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'BillBro Invoice',
+                          'Invoice',
                           style: GoogleFonts.inter(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          'Date: ${date.toString().substring(0, 10)}',
+                          'Date: ${DateFormat("dd/MM/yyyy").format(date)}',
                           style: GoogleFonts.inter(fontSize: 16),
                         ),
                       ],
@@ -193,16 +281,15 @@ class InvoicePreview extends StatelessWidget {
                       },
                       children: [
                         TableRow(
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                          ),
+                          decoration: BoxDecoration(color: Colors.grey[200]),
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(8),
                               child: Text(
                                 'Item',
                                 style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             Padding(
@@ -210,7 +297,8 @@ class InvoicePreview extends StatelessWidget {
                               child: Text(
                                 'Qty',
                                 style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             Padding(
@@ -218,7 +306,8 @@ class InvoicePreview extends StatelessWidget {
                               child: Text(
                                 'Price',
                                 style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             Padding(
@@ -226,7 +315,8 @@ class InvoicePreview extends StatelessWidget {
                               child: Text(
                                 'Total',
                                 style: GoogleFonts.inter(
-                                    fontWeight: FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -251,14 +341,14 @@ class InvoicePreview extends StatelessWidget {
                               Padding(
                                 padding: const EdgeInsets.all(8),
                                 child: Text(
-                                  '₹${item.item.price}',
+                                  'Rs. ${item.item.price}',
                                   style: GoogleFonts.inter(),
                                 ),
                               ),
                               Padding(
                                 padding: const EdgeInsets.all(8),
                                 child: Text(
-                                  '₹${item.total}',
+                                  'Rs. ${item.total}',
                                   style: GoogleFonts.inter(),
                                 ),
                               ),
@@ -277,13 +367,41 @@ class InvoicePreview extends StatelessWidget {
                           border: Border.all(color: Colors.grey[300]!),
                         ),
                         child: Text(
-                          'Total Amount: ₹${total.toStringAsFixed(2)}',
+                          'Total Amount: Rs. ${total.toStringAsFixed(2)}',
                           style: GoogleFonts.inter(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 40),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Thank you for visiting us!',
+                          style: GoogleFonts.inter(fontSize: 14),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FaIcon(FontAwesomeIcons.instagram),
+                            const SizedBox(width: 10),
+                            Text('@viruzverse.tech'),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FaIcon(FontAwesomeIcons.globe),
+                            const SizedBox(width: 10),
+                            Text('viruzverse.tech'),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -295,19 +413,16 @@ class InvoicePreview extends StatelessWidget {
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.inter(),
-                  ),
+                  child: Text('Cancel', style: GoogleFonts.inter()),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton.icon(
-                  onPressed: () => _generatePdf(context),
+                  onPressed: () async {
+                    int newId = await setInvoiceToFirestore();
+                    await _generatePdf(context, newId);
+                  },
                   icon: const Icon(Icons.print),
-                  label: Text(
-                    'Print Invoice',
-                    style: GoogleFonts.inter(),
-                  ),
+                  label: Text('Print Invoice', style: GoogleFonts.inter()),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,

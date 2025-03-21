@@ -12,7 +12,7 @@ class PinEntryScreen extends StatefulWidget {
 
 class _PinEntryScreenState extends State<PinEntryScreen> {
   final TextEditingController pinController = TextEditingController();
-  final String correctPin = "1234"; // Change this as needed
+  final String correctPin = "1234";
 
   void validatePin() {
     if (pinController.text == correctPin) {
@@ -52,7 +52,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Enter your PIN to access BillBro',
+                'Enter your PIN to access Viruzverse Billing',
                 style: GoogleFonts.inter(fontSize: 16, color: Colors.grey[600]),
               ),
               const SizedBox(height: 60),
@@ -100,7 +100,11 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
                               inactiveColor: Colors.grey[300],
                             ),
                             enableActiveFill: true,
-                            onChanged: (value) {},
+                            onChanged: (value) {
+                              if (value.length == 4) {
+                                validatePin();
+                              }
+                            },
                           ),
                           const SizedBox(height: 30),
                           ElevatedButton(
